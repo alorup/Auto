@@ -1,0 +1,89 @@
+name: Auto Commit
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+
+jobs:
+  commit:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure Git
+        run: |
+          if [ $((RANDOM % 2)) -eq 0 ]; then
+            git config --global user.name "${{ github.actor }}"
+            git config --global user.email "${{ github.actor }}@users.noreply.github.com"
+            echo "Using user info: ${{ github.actor }}"
+          else
+            git config --global user.name "github-actions[bot]"
+            git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            echo "Using GitHub Actions bot"
+          fi
+      - name: Switch to main branch
+        run: git checkout main
+
+      - name: Loop Commit Updates
+        run: |
+          set -e
+          
+          FILES=(".github/MahbubHS.md" "README.md" ".github/MahbubHS_1.md" ".github/MahbubHS_2.md")
+          COMMIT_LOOP_COUNT=15
+
+          for FILE in "${FILES[@]}"; do
+            echo "Checking for file: $FILE"
+
+            # Create directory if it doesn't exist
+            DIR=$(dirname "$FILE")
+            if [ "$DIR" != "." ]; then
+              mkdir -p "$DIR"
+            fi
+
+            for ((i=1; i<=COMMIT_LOOP_COUNT; i++)); do
+              echo "Iteration $i of $COMMIT_LOOP_COUNT"
+              if [ ! -f "$FILE" ]; then
+                echo "File not found, creating $FILE..."
+                echo "# Git Commit" > "$FILE"
+                echo "[![Auto Commit](https://github.com/alorup/Auto/actions/workflows/active.yml/badge.svg)](https://github.com/alorup/Auto/actions/workflows/active.yml)" >> "$FILE" 
+                echo "" >> "$FILE"
+                echo "This file was added - $(date +"%b %d, %Y")  " >> "$FILE"
+                echo "Last commit at UTC - $(date +"%I:%M %p")" >> "$FILE"
+                echo "" >> "$FILE"
+                echo "Daily git commit" >> "$FILE"
+                echo "" >> "$FILE"
+                echo "commit number: 1" >> "$FILE"
+                NEXT_COUNT=1
+              else
+                echo "File exists. Updating commit number..."
+                CURRENT_COUNT=$(grep -oP 'commit number: \K\d+' "$FILE" || echo "0")
+                echo "Current commit number: $CURRENT_COUNT"
+                NEXT_COUNT=$((CURRENT_COUNT + 1))
+                sed -i "s/commit number: .*/commit number: $NEXT_COUNT/" "$FILE"
+                sed -i "s/Last commit at UTC -.*/Last commit at UTC - $(date +"%I:%M %p")/" "$FILE"
+                echo "Updated commit number to: $NEXT_COUNT and time to $(date +"%I:%M %p")"
+              fi
+
+              echo "Contents of the file:"
+              cat "$FILE"
+
+              echo "Staging changes..."
+              git add "$FILE"
+              
+              echo "Committing changes..."
+              git commit -m "Auto commit #$NEXT_COUNT : target - ($FILE)" --allow-empty
+              sleep 1
+            done
+
+            echo "Pulling latest changes to ensure we start with the latest commit..."
+            git pull --rebase origin main
+            git push origin main
+          done
+
+          echo "All commits completed successfully!"
+          
